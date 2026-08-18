@@ -1,8 +1,8 @@
-# IndexTTS 1.5
+# IndexTTS Remote API
 
 <div align="center">
   <img src="assets/index_icon.png" width="180" alt="IndexTTS" />
-  <h2>Industrial-level controllable and efficient zero-shot text-to-speech</h2>
+  <h2>Remote text-to-speech API with voice management and queued generation</h2>
   <p>工业级可控、高效的零样本文本转语音系统</p>
 </div>
 
@@ -17,6 +17,36 @@
 > This repository is a community-maintained fork/workspace based on the upstream [IndexTTS](https://github.com/index-tts/index-tts) project. It contains source-code and integration changes; it does not redistribute model weights.
 >
 > 本仓库是基于上游 [IndexTTS](https://github.com/index-tts/index-tts) 的社区维护版本，包含源码和集成改动，不重新分发模型权重。
+
+## API Service Overview
+
+This project turns one GPU host running IndexTTS into a remotely callable speech service. Remote clients send authenticated HTTP requests; they do not need to install the model or own a GPU. IndexTTS is the inference engine underneath the API, not the client-facing product.
+
+- API-key protected remote text-to-speech over HTTP/HTTPS
+- Reference-voice upload, naming, enable/disable, and per-voice settings
+- Single-worker GPU queue with asynchronous task polling and WAV downloads
+- OpenAI-compatible `POST /v1/audio/speech` endpoint
+- Local administration, Swagger docs at `/docs`, and health checks at `/health`
+
+## How It Works
+
+1. A remote client sends text, a voice code, and an API key.
+2. FastAPI validates the key and stores a task.
+3. One GPU worker loads the selected reference voice and runs IndexTTS.
+4. The service stores the WAV and task status.
+5. The client polls the task and downloads the audio.
+
+Keep Uvicorn on `127.0.0.1:7870`; publish it through an HTTPS reverse proxy or tunnel that you control. Never expose the local controller on port `7871`.
+
+## Services, Environment, and Operator Inputs
+
+The server needs Python 3.10, CUDA-compatible PyTorch, an NVIDIA GPU, FFmpeg, IndexTTS model files, FastAPI/Uvicorn, and disk storage. Remote deployment additionally needs an HTTPS proxy or tunnel, optional domain/DNS, TLS, firewall rules, rate limits, upload-size limits, and monitoring.
+
+The operator provides the GPU host and drivers, model weights in `checkpoints/`, legally authorized reference recordings, an API key, public URL/proxy credentials, storage cleanup policy, TLS, firewall, backups, and monitoring. The generated key is stored in `api_data/api_key.txt`; never commit or share it.
+
+## Remote Calls
+
+Use `POST /api/v1/tts`, then poll `GET /api/v1/tasks/{task_id}` and download `GET /api/v1/tasks/{task_id}/audio`. The OpenAI-compatible `POST /v1/audio/speech` endpoint returns WAV bytes directly. Full details are in [API_README.md](API_README.md).
 
 ## English
 
