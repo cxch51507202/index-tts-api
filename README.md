@@ -1,231 +1,85 @@
 # IndexTTS Remote API
 
 <div align="center">
-  <img src="assets/index_icon.png" width="180" alt="IndexTTS" />
+  <img src="assets/index_icon.png" width="160" alt="IndexTTS Remote API" />
   <h2>Remote text-to-speech API with voice management and queued generation</h2>
 </div>
 
-<p align="center">
-  <a href="README.md">English</a> | <a href="README.zh-CN.md">简体中文</a>
-</p>
-
-<p align="center">
-  <a href="https://arxiv.org/abs/2502.05512"><img src="https://img.shields.io/badge/arXiv-2502.05512-b31b1b" alt="Paper" /></a>
-  <a href="https://github.com/index-tts/index-tts"><img src="https://img.shields.io/badge/upstream-index--tts-181717?logo=github" alt="Upstream" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/code-Apache--2.0-green" alt="Apache 2.0" /></a>
-</p>
-
-> **Notice**
->
-> This repository is a community-maintained fork/workspace based on the upstream [IndexTTS](https://github.com/index-tts/index-tts) project. It contains source-code and integration changes; it does not redistribute model weights.
-
-## API Service Overview
+<p align="center"><a href="README.md">English</a> | <a href="README.zh-CN.md">简体中文</a></p>
 
 This project turns one GPU host running IndexTTS into a remotely callable speech service. Remote clients send authenticated HTTP requests; they do not need to install the model or own a GPU. IndexTTS is the inference engine underneath the API, not the client-facing product.
 
+## What the API Provides
+
 - API-key protected remote text-to-speech over HTTP/HTTPS
 - Reference-voice upload, naming, enable/disable, and per-voice settings
-- Single-worker GPU queue with asynchronous task polling and WAV downloads
+- A single-worker GPU queue for safe concurrent submissions
+- Asynchronous tasks with IDs, status, queue position, and WAV downloads
 - OpenAI-compatible `POST /v1/audio/speech` endpoint
 - Local administration, Swagger docs at `/docs`, and health checks at `/health`
 
-## How It Works
+## Request Flow
 
 1. A remote client sends text, a voice code, and an API key.
-2. FastAPI validates the key and stores a task.
-3. One GPU worker loads the selected reference voice and runs IndexTTS.
-4. The service stores the WAV and task status.
+2. FastAPI authenticates the request and stores a task.
+3. One GPU worker loads the reference voice and runs IndexTTS.
+4. The service stores the WAV file and task status.
 5. The client polls the task and downloads the audio.
 
 Keep Uvicorn on `127.0.0.1:7870`; publish it through an HTTPS reverse proxy or tunnel that you control. Never expose the local controller on port `7871`.
 
-## Services, Environment, and Operator Inputs
+## Required Environment
 
-The server needs Python 3.10, CUDA-compatible PyTorch, an NVIDIA GPU, FFmpeg, IndexTTS model files, FastAPI/Uvicorn, and disk storage. Remote deployment additionally needs an HTTPS proxy or tunnel, optional domain/DNS, TLS, firewall rules, rate limits, upload-size limits, and monitoring.
+The server needs Python 3.10, CUDA-compatible PyTorch, an NVIDIA GPU, FFmpeg, IndexTTS model files, FastAPI/Uvicorn, and disk storage for voices, SQLite tasks, and generated WAV files.
 
-The operator provides the GPU host and drivers, model weights in `checkpoints/`, legally authorized reference recordings, an API key, public URL/proxy credentials, storage cleanup policy, TLS, firewall, backups, and monitoring. The generated key is stored in `api_data/api_key.txt`; never commit or share it.
+Remote deployment additionally requires an HTTPS proxy or tunnel, optional domain/DNS, TLS certificates, firewall rules, rate limits, upload-size limits, and monitoring.
+
+## What the Operator Must Provide
+
+- GPU host, NVIDIA driver, CUDA runtime, and compatible PyTorch
+- IndexTTS 1.5 model files downloaded into `checkpoints/`
+- Reference recordings that the operator is authorized to use
+- An API key through `INDEXTTS_API_KEY` or first-start generation
+- Public URL and proxy/tunnel credentials for remote access
+- Storage and cleanup policy for `api_data/` and `outputs/`
+- TLS, firewall, rate limiting, backups, and uptime monitoring
+
+The generated key is stored in `api_data/api_key.txt`; never commit or share it.
+
+## Installation
+
+```bash
+git clone https://github.com/cxch51507202/index-tts-api.git
+cd index-tts-api
+conda create -n index-tts-api python=3.10
+conda activate index-tts-api
+conda install -c conda-forge ffmpeg pynini==2.1.6
+pip install -e .
+pip install -U huggingface_hub
+huggingface-cli download IndexTeam/IndexTTS-1.5 config.yaml bigvgan_discriminator.pth bigvgan_generator.pth bpe.model dvae.pth gpt.pth unigram_12000.vocab --local-dir checkpoints
+cp api_config.example.json api_config.json
+cp voices.example.json voices.json
+python -m api_server
+```
 
 ## Remote Calls
 
-Use `POST /api/v1/tts`, then poll `GET /api/v1/tasks/{task_id}` and download `GET /api/v1/tasks/{task_id}/audio`. The OpenAI-compatible `POST /v1/audio/speech` endpoint returns WAV bytes directly. Full details are in [API_README.md](API_README.md).
+Create an asynchronous task with `POST /api/v1/tts`, poll `GET /api/v1/tasks/{task_id}`, and download `GET /api/v1/tasks/{task_id}/audio`. These endpoints require `Authorization: Bearer YOUR_API_KEY`.
 
-## English
-
-IndexTTS is a GPT-style zero-shot TTS system for Chinese and English. Given a short reference recording, it can synthesize speech in the reference voice while preserving controllable pronunciation and prosody. IndexTTS 1.5 improves stability and English performance and includes an optional WebUI and a local FastAPI service in this fork.
-
-### Highlights
-
-- Zero-shot voice cloning from a short reference recording
-- Chinese character-pinyin hybrid modeling for pronunciation correction
-- Punctuation-aware pauses and controllable inference settings
-- Conformer speaker conditioning and BigVGAN2-based decoding
-- Command-line inference, Gradio WebUI, and optional queued API service
-
-### Quick start
+The OpenAI-compatible endpoint returns WAV bytes directly:
 
 ```bash
-git clone <your-github-repository-url>
-cd index-tts-1.5
-conda create -n index-tts python=3.10
-conda activate index-tts
-conda install -c conda-forge ffmpeg pynini==2.1.6
-pip install -e .
+curl -X POST https://your-api.example.com/v1/audio/speech -H "Authorization: Bearer YOUR_API_KEY" -H "Content-Type: application/json" -d '{"model":"indextts-1.5","voice":"my_voice","input":"Remote speech test","response_format":"wav"}' -o output.wav
 ```
 
-Install a CUDA-compatible PyTorch build from [pytorch.org](https://pytorch.org/get-started/locally/), then download the model files (the weights are not stored in Git):
+See [API_README.md](API_README.md) for complete voice, task, deployment, and security documentation.
 
-```bash
-pip install -U huggingface_hub
-huggingface-cli download IndexTeam/IndexTTS-1.5 \
-  config.yaml bigvgan_discriminator.pth bigvgan_generator.pth \
-  bpe.model dvae.pth gpt.pth unigram_12000.vocab \
-  --local-dir checkpoints
-```
+## Security and Responsible Use
 
-For users in China, `HF_ENDPOINT=https://hf-mirror.com` can be used when appropriate. ModelScope mirrors are available from [IndexTeam/Index-TTS-1.5](https://modelscope.cn/models/IndexTeam/Index-TTS-1.5).
+Only upload or synthesize voices with the speaker's informed consent. Do not use the service for fraud, impersonation, harassment, unlawful activity, or content that violates applicable law.
 
-Run CLI inference with a voice recording you are authorized to use:
+Source code is licensed under [Apache License 2.0](LICENSE). Model weights are governed by [INDEX_MODEL_LICENSE](INDEX_MODEL_LICENSE); commercial model use requires prior written authorization from the licensor.
 
-```bash
-indextts "Hello, this is a test." \
-  --voice reference_voice.wav \
-  --model_dir checkpoints \
-  --config checkpoints/config.yaml \
-  --output output.wav
-```
+## Engine and Acknowledgements
 
-Start the WebUI:
-
-```bash
-pip install -e ".[webui]" --no-build-isolation
-python webui.py
-```
-
-Then open `http://127.0.0.1:7860`.
-
-### Optional API service
-
-The `api_server/` package provides API-key authentication, voice management, queued generation, task polling, and an OpenAI-compatible `/v1/audio/speech` endpoint. Copy the templates before running locally:
-
-```bash
-copy api_config.example.json api_config.json
-copy voices.example.json voices.json
-python -m api_server
-```
-
-See [API_README.md](API_README.md) for endpoint examples. Never commit `api_data/`, private recordings, generated audio, or API keys.
-
-### License and responsible use
-
-Source code is licensed under [Apache License 2.0](LICENSE). Model weights are governed by the separate [Index model license](INDEX_MODEL_LICENSE); review it before downloading, modifying, hosting, or using the model commercially. Commercial use requires prior written authorization from the licensor.
-
-Only clone or synthesize voices with the speaker's informed consent. Do not use the system for fraud, impersonation, harassment, unlawful activity, or content that violates applicable law.
-
-## 简体中文
-
-IndexTTS 是面向中文和英文的 GPT 风格零样本文本转语音系统。提供一段较短的参考音频后，系统可以在保留音色特征的同时生成语音，并通过拼音、标点和推理参数控制发音与韵律。IndexTTS 1.5 进一步提升了稳定性和英文表现；本分支另外集成了可选的 WebUI 和本地 FastAPI 服务。
-
-### 主要特性
-
-- 使用短参考音频进行零样本音色复刻
-- 字符-拼音混合建模，便于修正中文发音
-- 根据标点控制停顿，支持多项推理参数调节
-- Conformer 说话人条件编码器与 BigVGAN2 解码器
-- 支持命令行、Gradio WebUI，以及可选的队列式 API 服务
-
-### 快速开始
-
-```bash
-git clone <你的-GitHub-仓库地址>
-cd index-tts-1.5
-conda create -n index-tts python=3.10
-conda activate index-tts
-conda install -c conda-forge ffmpeg pynini==2.1.6
-pip install -e .
-```
-
-请先从 [pytorch.org](https://pytorch.org/get-started/locally/) 安装匹配 CUDA 的 PyTorch，然后下载模型文件（模型权重不会存入 Git）：
-
-```bash
-pip install -U huggingface_hub
-huggingface-cli download IndexTeam/IndexTTS-1.5 \
-  config.yaml bigvgan_discriminator.pth bigvgan_generator.pth \
-  bpe.model dvae.pth gpt.pth unigram_12000.vocab \
-  --local-dir checkpoints
-```
-
-国内用户可按网络情况设置 `HF_ENDPOINT=https://hf-mirror.com`，也可以从 ModelScope 的 [IndexTeam/Index-TTS-1.5](https://modelscope.cn/models/IndexTeam/Index-TTS-1.5) 获取镜像。
-
-使用获得授权的参考音频运行命令行推理：
-
-```bash
-indextts "大家好，这是一个测试。" \
-  --voice reference_voice.wav \
-  --model_dir checkpoints \
-  --config checkpoints/config.yaml \
-  --output output.wav
-```
-
-启动 WebUI：
-
-```bash
-pip install -e ".[webui]" --no-build-isolation
-python webui.py
-```
-
-然后打开 `http://127.0.0.1:7860`。
-
-### 可选 API 服务
-
-`api_server/` 提供 API Key 鉴权、音色管理、队列式生成、任务轮询，以及兼容 OpenAI 的 `/v1/audio/speech` 接口。运行前请复制配置模板：
-
-```bash
-copy api_config.example.json api_config.json
-copy voices.example.json voices.json
-python -m api_server
-```
-
-接口示例见 [API_README.md](API_README.md)。请勿提交 `api_data/`、私人录音、生成音频或 API Key。
-
-### 许可证与负责任使用
-
-源码采用 [Apache License 2.0](LICENSE)。模型权重受单独的 [Index 模型许可证](INDEX_MODEL_LICENSE) 约束；下载、修改、部署或商业使用模型前请仔细阅读。商业用途须事先取得许可方书面授权。
-
-仅在获得说话人知情同意的前提下进行音色复刻或语音合成。不得将本项目用于诈骗、冒充、骚扰、违法活动或违反适用法律的内容。
-
-## Acknowledgements / 致谢
-
-This repository builds on the original [IndexTTS](https://github.com/index-tts/index-tts) project by bilibili Index. The upstream project credits the following open-source projects, which are also relevant to this fork:
-
-- [Tortoise TTS](https://github.com/neonbjb/tortoise-tts): GPT-style text-to-speech research and implementation foundations.
-- [Coqui TTS / XTTSv2](https://github.com/coqui-ai/TTS): zero-shot TTS architecture and related components.
-- [NVIDIA BigVGAN](https://github.com/NVIDIA/BigVGAN): neural vocoder and audio-generation components.
-- [WeNet](https://github.com/wenet-e2e/wenet): speech-recognition and speech-processing components.
-- [Icefall](https://github.com/k2-fsa/icefall): speech-recognition recipes and supporting tooling.
-- [FastAPI](https://github.com/fastapi/fastapi), [Uvicorn](https://github.com/Kludex/uvicorn), and [Gradio](https://github.com/gradio-app/gradio): the optional API and WebUI layers included in this fork.
-
-本仓库基于 bilibili Index 团队发布的原始 [IndexTTS](https://github.com/index-tts/index-tts) 项目。上游项目致谢并依赖以下开源项目，本分支同样受益于这些工作：
-
-- [Tortoise TTS](https://github.com/neonbjb/tortoise-tts)：GPT 风格文本转语音研究与实现基础。
-- [Coqui TTS / XTTSv2](https://github.com/coqui-ai/TTS)：零样本文本转语音架构及相关组件。
-- [NVIDIA BigVGAN](https://github.com/NVIDIA/BigVGAN)：神经声码器与音频生成组件。
-- [WeNet](https://github.com/wenet-e2e/wenet)：语音识别与语音处理组件。
-- [Icefall](https://github.com/k2-fsa/icefall)：语音识别方案与辅助工具。
-- [FastAPI](https://github.com/fastapi/fastapi)、[Uvicorn](https://github.com/Kludex/uvicorn) 和 [Gradio](https://github.com/gradio-app/gradio)：本分支集成的可选 API 与 WebUI 层。
-
-Please review the licenses of all dependencies before redistribution.
-重新分发前请分别审阅上述各依赖项目的许可证。
-
-## Paper and citation / 论文与引用
-
-See the [IndexTTS paper](https://arxiv.org/abs/2502.05512) for benchmark methodology and results.
-评测方法和结果请参阅 [IndexTTS 论文](https://arxiv.org/abs/2502.05512)。
-
-```bibtex
-@article{deng2025indextts,
-  title={IndexTTS: An Industrial-Level Controllable and Efficient Zero-Shot Text-To-Speech System},
-  author={Wei Deng and Siyi Zhou and Jingchen Shu and Jinchao Wang and Lu Wang},
-  journal={arXiv preprint arXiv:2502.05512},
-  year={2025}
-}
-```
+The inference engine comes from [IndexTTS](https://github.com/index-tts/index-tts) by bilibili Index. This project also acknowledges [Tortoise TTS](https://github.com/neonbjb/tortoise-tts), [Coqui TTS / XTTSv2](https://github.com/coqui-ai/TTS), [NVIDIA BigVGAN](https://github.com/NVIDIA/BigVGAN), [WeNet](https://github.com/wenet-e2e/wenet), [Icefall](https://github.com/k2-fsa/icefall), [FastAPI](https://github.com/fastapi/fastapi), [Uvicorn](https://github.com/Kludex/uvicorn), and [Gradio](https://github.com/gradio-app/gradio).
