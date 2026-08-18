@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="controller-token" content="__CONTROLLER_TOKEN__">
+  <title>IndexTTS 本机控制台</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink:#17212b; --muted:#667481; --line:#d8e0e6; --paper:#f5f7f9;
+      --surface:#fff; --navy:#102a43; --teal:#0b7285; --ok:#19764a;
+      --ok-bg:#e9f6ef; --warn:#8a5a00; --warn-bg:#fff6dc; --danger:#b42318;
+      --danger-bg:#fff0ee;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--paper); color:var(--ink); font:14px/1.5 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+    header { background:var(--navy); color:#fff; padding:20px max(18px,calc((100vw - 1060px)/2)); }
+    .header-row,.toolbar,.section-head,.service-head,.actions,.switch-row { display:flex; align-items:center; }
+    .header-row,.toolbar,.section-head,.service-head { justify-content:space-between; }
+    .header-row { gap:20px; }
+    h1,h2,h3,p { margin:0; }
+    h1 { font-size:22px; letter-spacing:0; }
+    header p { margin-top:3px; color:#c8d6e1; }
+    .local-badge { border:1px solid #6f8798; border-radius:6px; padding:7px 10px; white-space:nowrap; }
+    main { width:min(1060px,calc(100% - 32px)); margin:0 auto 40px; }
+    .toolbar { min-height:66px; gap:14px; border-bottom:1px solid var(--line); }
+    .toolbar-right,.actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .timestamp,.muted { color:var(--muted); }
+    button,a.command { min-height:36px; border:1px solid var(--teal); border-radius:5px; padding:7px 12px; background:var(--surface); color:#075b6a; font:600 14px inherit; text-decoration:none; cursor:pointer; }
+    button:hover,a.command:hover { background:#eaf6f8; }
+    button:disabled { opacity:.5; cursor:wait; }
+    button.primary { background:var(--teal); color:#fff; }
+    button.primary:hover { background:#096274; }
+    button.danger { border-color:#d77e76; color:var(--danger); }
+    button.danger:hover { background:var(--danger-bg); }
+    section { padding:21px 0; border-bottom:1px solid var(--line); }
+    .section-head { gap:14px; margin-bottom:13px; }
+    h2 { font-size:17px; }
+    .services { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    .service { background:var(--surface); border:1px solid var(--line); border-radius:6px; overflow:hidden; }
+    .service-head { padding:15px 16px; gap:12px; border-bottom:1px solid var(--line); }
+    h3 { font-size:16px; }
+    .state { display:inline-flex; align-items:center; gap:7px; font-weight:700; color:var(--muted); white-space:nowrap; }
+    .dot { width:9px; height:9px; border-radius:50%; background:#9aa7b0; }
+    .state.ok { color:var(--ok); } .state.ok .dot { background:#43c17a; }
+    .state.warn { color:var(--warn); } .state.warn .dot { background:#d39b2a; }
+    .state.off { color:var(--danger); } .state.off .dot { background:#ef6a61; }
+    .facts { width:100%; border-collapse:collapse; }
+    .facts th,.facts td { padding:9px 16px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+    .facts th { width:122px; color:#405160; background:#f9fafb; font-weight:600; }
+    .service .actions { padding:13px 16px; min-height:62px; }
+    .settings { background:var(--surface); border:1px solid var(--line); border-radius:6px; }
+    .setting { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:14px 16px; }
+    .setting + .setting { border-top:1px solid var(--line); }
+    .setting-title { font-weight:700; }
+    .switch-row { gap:10px; }
+    .switch { position:relative; width:42px; height:24px; flex:0 0 auto; }
+    .switch input { position:absolute; opacity:0; width:1px; height:1px; }
+    .slider { position:absolute; inset:0; border-radius:12px; background:#a8b2ba; cursor:pointer; transition:.15s; }
+    .slider::before { content:""; position:absolute; width:18px; height:18px; left:3px; top:3px; border-radius:50%; background:#fff; transition:.15s; box-shadow:0 1px 2px #0003; }
+    .switch input:checked + .slider { background:var(--teal); }
+    .switch input:checked + .slider::before { transform:translateX(18px); }
+    .notice { display:none; margin-top:12px; padding:12px 14px; border:1px solid #9ed4b5; border-radius:5px; background:var(--ok-bg); color:#145c39; }
+    .notice.visible { display:block; }
+    .notice.error { border-color:#efb1ab; background:var(--danger-bg); color:#7d211b; }
+    code { font:13px ui-monospace,SFMono-Regular,Consolas,monospace; }
+    @media (max-width:720px) {
+      .header-row,.toolbar,.section-head,.setting { align-items:flex-start; flex-direction:column; }
+      .services { grid-template-columns:1fr; }
+      .toolbar { padding:14px 0; }
+      .toolbar-right,.actions { width:100%; }
+      .toolbar-right button,.toolbar-right a,.actions button { flex:1 1 auto; text-align:center; }
+      .setting { gap:10px; }
+      .facts th { width:105px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-row">
+      <div><h1>IndexTTS 本机控制台</h1><p>API 与 Cloudflare Tunnel 服务管理</p></div>
+      <div class="local-badge">仅限本机访问</div>
+    </div>
+  </header>
+  <main>
+    <div class="toolbar">
+      <span id="checkedAt" class="timestamp">正在读取状态</span>
+      <div class="toolbar-right">
+        <a class="command" href="http://127.0.0.1:7870/health">API 状态</a>
+        <a class="command" href="http://127.0.0.1:7870/admin">音色管理</a>
+        <button id="recoverBtn" class="primary" type="button">恢复远程服务</button>
+        <button id="refreshBtn" type="button">重新检测</button>
+      </div>
+    </div>
+
+    <section>
+      <div class="section-head"><h2>服务状态</h2><span class="muted">每 5 秒自动刷新</span></div>
+      <div class="services">
+        <article class="service">
+          <div class="service-head"><h3>IndexTTS API</h3><span id="apiState" class="state"><i class="dot"></i><span>检测中</span></span></div>
+          <table class="facts"><tbody>
+            <tr><th>运行阶段</th><td id="apiPhase">-</td></tr>
+            <tr><th>监听地址</th><td><code>127.0.0.1:7870</code></td></tr>
+            <tr><th>进程</th><td id="apiPid">-</td></tr>
+            <tr><th>健康延迟</th><td id="apiLatency">-</td></tr>
+          </tbody></table>
+          <div class="actions">
+            <button data-path="/api/start" type="button">启动</button>
+            <button data-path="/api/restart" type="button">重启</button>
+            <button class="danger" data-path="/api/stop" data-confirm="停止 API 会中断正在生成的任务。确认停止吗？" type="button">停止</button>
+          </div>
+        </article>
+
+        <article class="service">
+          <div class="service-head"><h3>Cloudflare Tunnel</h3><span id="tunnelState" class="state"><i class="dot"></i><span>检测中</span></span></div>
+          <table class="facts"><tbody>
+            <tr><th>服务状态</th><td id="tunnelService">-</td></tr>
+            <tr><th>连接状态</th><td id="tunnelReady">-</td></tr>
+            <tr><th>启动类型</th><td id="tunnelStartType">-</td></tr>
+            <tr><th>检测延迟</th><td id="tunnelLatency">-</td></tr>
+          </tbody></table>
+          <div class="actions">
+            <button data-path="/tunnel/start" type="button">启动</button>
+            <button data-path="/tunnel/restart" type="button">重启</button>
+            <button class="danger" data-path="/tunnel/stop" data-confirm="停止 Tunnel 后公网 API 将无法访问。确认停止吗？" type="button">停止</button>
+          </div>
+        </article>
+      </div>
+      <div id="notice" class="notice"></div>
+    </section>
+
+    <section>
+      <div class="section-head"><h2>启动设置</h2></div>
+      <div class="settings">
+        <div class="setting">
+          <div><div class="setting-title">API 登录后自动启动</div><div id="autostartDetail" class="muted">正在读取任务计划</div></div>
+          <div class="switch-row"><span id="autostartLabel">-</span><label class="switch"><input id="autostartToggle" type="checkbox"><span class="slider"></span></label></div>
+        </div>
+        <div class="setting">
+          <div><div class="setting-title">本机控制器</div><div class="muted">电脑登录后保持运行，不加载模型</div></div>
+          <span class="state ok"><i class="dot"></i><span>运行中</span></span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const token=document.querySelector('meta[name="controller-token"]').content;
+    const $=(id)=>document.getElementById(id);
+    let busy=false; let refreshing=false;
+
+    function stateBadge(element,kind,text){ element.className=`state ${kind}`; element.lastElementChild.textContent=text; }
+    function setBusy(value){ busy=value; document.querySelectorAll("button,input").forEach(el=>el.disabled=value); }
+    function showNotice(message,ok=true){ const box=$("notice"); box.textContent=message; box.className=`notice visible${ok?"":" error"}`; }
+
+    function render(data){
+      const api=data.api; const tunnel=data.tunnel;
+      if(api.phase==="online") stateBadge($("apiState"),"ok","正常");
+      else if(api.phase==="starting") stateBadge($("apiState"),"warn","启动中");
+      else stateBadge($("apiState"),"off","已停止");
+      $("apiPhase").textContent={online:"模型已加载",starting:"正在加载模型",stopped:"服务未运行"}[api.phase] || api.phase;
+      $("apiPid").textContent=api.pid?`PID ${api.pid}`:"-";
+      $("apiLatency").textContent=api.health.reachable?`${api.health.latency_ms} ms`:"无法连接";
+
+      if(tunnel.ready) stateBadge($("tunnelState"),"ok","正常");
+      else if(tunnel.running) stateBadge($("tunnelState"),"warn","连接中");
+      else stateBadge($("tunnelState"),"off","已停止");
+      $("tunnelService").textContent=tunnel.status;
+      $("tunnelReady").textContent=tunnel.ready?"已连接 Cloudflare":"未建立连接";
+      $("tunnelStartType").textContent=tunnel.start_type;
+      $("tunnelLatency").textContent=tunnel.ready?`${tunnel.ready_probe.latency_ms} ms`:"无法连接";
+
+      $("autostartToggle").checked=api.autostart;
+      $("autostartLabel").textContent=api.autostart?"已启用":"已禁用";
+      $("autostartDetail").textContent=`任务计划状态：${api.task_state}`;
+      $("checkedAt").textContent=`检测时间：${new Date(data.controller.checked_at).toLocaleTimeString("zh-CN",{hour12:false})}`;
+    }
+
+    async function refresh(){
+      if(refreshing) return; refreshing=true;
+      try { const response=await fetch("/status",{cache:"no-store"}); if(!response.ok) throw new Error(`状态接口返回 ${response.status}`); render(await response.json()); }
+      catch(error){ showNotice(`读取状态失败：${error.message}`,false); }
+      finally { refreshing=false; }
+    }
+
+    async function act(path,confirmation){
+      if(busy || (confirmation && !window.confirm(confirmation))) return;
+      setBusy(true); showNotice("正在执行操作，请稍候。",true);
+      try {
+        const response=await fetch(path,{method:"POST",headers:{"x-index-tts-controller-token":token}});
+        const data=await response.json();
+        if(!response.ok) throw new Error(data.detail || `操作返回 ${response.status}`);
+        showNotice(data.message,data.ok); render(data.state);
+        setTimeout(refresh,2500);
+      } catch(error) { showNotice(`操作失败：${error.message}`,false); }
+      finally { setBusy(false); }
+    }
+
+    document.querySelectorAll("button[data-path]").forEach(button=>button.onclick=()=>act(button.dataset.path,button.dataset.confirm));
+    $("recoverBtn").onclick=()=>act("/recover");
+    $("refreshBtn").onclick=refresh;
+    $("autostartToggle").onchange=(event)=>act(`/api-autostart/${event.target.checked?"enable":"disable"}`);
+    refresh(); setInterval(()=>{if(!busy) refresh();},5000);
+  </script>
+</body>
+</html>

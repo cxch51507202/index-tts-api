@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IndexTTS 运行状态</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink:#17212b;
+      --muted:#667481;
+      --line:#d8e0e6;
+      --paper:#f5f7f9;
+      --surface:#ffffff;
+      --navy:#102a43;
+      --teal:#0b7285;
+      --ok:#19764a;
+      --ok-bg:#e9f6ef;
+      --danger:#b42318;
+      --danger-bg:#fff0ee;
+      --warn:#8a5a00;
+      --warn-bg:#fff6dc;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--paper); color:var(--ink); font:14px/1.55 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+    header { background:var(--navy); color:#fff; padding:24px max(20px,calc((100vw - 1080px)/2)); }
+    .header-row { display:flex; align-items:center; justify-content:space-between; gap:20px; }
+    h1,h2,p { margin:0; }
+    h1 { font-size:23px; letter-spacing:0; }
+    header p { color:#c8d6e1; margin-top:4px; }
+    .overall { display:flex; align-items:center; gap:9px; border:1px solid #6f8798; border-radius:6px; padding:8px 12px; white-space:nowrap; }
+    .dot { width:10px; height:10px; border-radius:50%; background:#9aa7b0; flex:0 0 auto; }
+    .dot.ok { background:#43c17a; }
+    .dot.error { background:#ef6a61; }
+    main { width:min(1080px,calc(100% - 32px)); margin:0 auto 44px; }
+    .toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:18px 0; border-bottom:1px solid var(--line); }
+    .timestamp { color:var(--muted); }
+    .toolbar-actions { display:flex; gap:8px; align-items:center; }
+    a.button-link { border:1px solid var(--teal); border-radius:5px; padding:8px 13px; background:var(--surface); color:#075b6a; font:600 14px inherit; text-decoration:none; }
+    a.button-link:hover { background:#eaf6f8; }
+    button { border:1px solid var(--teal); border-radius:5px; padding:8px 13px; background:var(--surface); color:#075b6a; font:600 14px inherit; cursor:pointer; }
+    button:hover { background:#eaf6f8; }
+    button:disabled { opacity:.55; cursor:wait; }
+    section { padding:22px 0; border-bottom:1px solid var(--line); }
+    .section-head { display:flex; align-items:baseline; justify-content:space-between; gap:16px; margin-bottom:14px; }
+    h2 { font-size:17px; }
+    .subtle { color:var(--muted); }
+    .checks { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); background:var(--surface); border:1px solid var(--line); border-radius:6px; overflow:hidden; }
+    .check { min-height:116px; padding:17px 18px; display:flex; flex-direction:column; gap:7px; }
+    .check:nth-child(even) { border-left:1px solid var(--line); }
+    .check:nth-child(n+3) { border-top:1px solid var(--line); }
+    .check-title { display:flex; align-items:center; justify-content:space-between; gap:12px; font-weight:700; }
+    .state { display:inline-flex; align-items:center; gap:7px; font-weight:700; color:var(--muted); }
+    .state.ok { color:var(--ok); }
+    .state.error { color:var(--danger); }
+    .check-value { font-size:16px; font-weight:700; overflow-wrap:anywhere; }
+    .check-detail { color:var(--muted); overflow-wrap:anywhere; }
+    .facts { width:100%; border-collapse:collapse; background:var(--surface); border:1px solid var(--line); }
+    .facts th,.facts td { padding:11px 13px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+    .facts tr:last-child th,.facts tr:last-child td { border-bottom:0; }
+    .facts th { width:190px; color:#405160; font-weight:600; background:#f9fafb; }
+    .facts td { overflow-wrap:anywhere; }
+    .alert { display:none; border:1px solid #efb1ab; border-radius:6px; background:var(--danger-bg); color:#7d211b; padding:14px 16px; }
+    .alert.visible { display:block; }
+    .alert ul { margin:8px 0 0; padding-left:21px; }
+    .requirements { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0; border:1px solid var(--line); border-radius:6px; background:var(--surface); overflow:hidden; }
+    .requirement { padding:14px 16px; border-bottom:1px solid var(--line); }
+    .requirement:nth-child(odd) { border-right:1px solid var(--line); }
+    .requirement:nth-last-child(-n+2) { border-bottom:0; }
+    .requirement b { display:block; margin-bottom:3px; }
+    .tip { margin-top:12px; padding:12px 14px; border-left:4px solid #d39b2a; background:var(--warn-bg); color:#684500; }
+    code { font:13px ui-monospace,SFMono-Regular,Consolas,monospace; }
+    @media (max-width:700px) {
+      .header-row,.toolbar,.section-head { align-items:flex-start; flex-direction:column; }
+      .checks,.requirements { grid-template-columns:1fr; }
+      .check:nth-child(even),.requirement:nth-child(odd) { border-left:0; border-right:0; }
+      .check + .check,.requirement + .requirement { border-top:1px solid var(--line); }
+      .check:nth-child(n+3) { border-top:1px solid var(--line); }
+      .requirement { border-bottom:0; }
+      .facts th { width:120px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-row">
+      <div><h1>IndexTTS 运行状态</h1><p>本机模型、任务队列与 Cloudflare Tunnel 实时检测</p></div>
+      <div class="overall"><i id="overallDot" class="dot"></i><strong id="overallText">正在检测</strong></div>
+    </div>
+  </header>
+
+  <main>
+    <div class="toolbar">
+      <span id="checkedAt" class="timestamp">等待首次检测</span>
+      <div class="toolbar-actions"><a id="controllerLink" class="button-link" href="http://127.0.0.1:7871/admin" hidden>本机控制台</a><button id="refreshBtn" type="button">重新检测</button></div>
+    </div>
+
+    <section>
+      <div class="section-head"><h2>核心状态</h2><span class="subtle">每 10 秒自动刷新</span></div>
+      <div id="checks" class="checks"></div>
+    </section>
+
+    <section>
+      <div class="section-head"><h2>运行参数</h2><span class="subtle">用于定位模型、队列和公网链路问题</span></div>
+      <table class="facts"><tbody id="facts"></tbody></table>
+    </section>
+
+    <section id="errorSection">
+      <div class="section-head"><h2>异常原因</h2></div>
+      <div id="errorBox" class="alert"></div>
+    </section>
+
+    <section>
+      <div class="section-head"><h2>VPN 节点要求</h2><span class="subtle">普通网页能访问，不代表 Tunnel 一定可用</span></div>
+      <div class="requirements">
+        <div class="requirement"><b>UDP 7844</b><span>Cloudflare Tunnel 首选 QUIC，节点应允许稳定的 UDP 转发。</span></div>
+        <div class="requirement"><b>TCP 7844</b><span>QUIC 不可用时用于 HTTP/2 回退，至少保证一种传输可用。</span></div>
+        <div class="requirement"><b>持续长连接</b><span>节点不能频繁重置连接、限时断流或快速更换出口地址。</span></div>
+        <div class="requirement"><b>DNS 与 TLS</b><span>不要错误解析或拦截 <code>argotunnel.com</code>、<code>cftunnel.com</code>。</span></div>
+      </div>
+      <div class="tip">如果本机正常但隧道未连接，优先更换 VPN 节点，然后重启 cloudflared；无需重启 IndexTTS，也无需重新提交已生成任务。</div>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const labels = {
+      local: "本机 API",
+      model: "IndexTTS 模型",
+      tunnel: "Cloudflare Tunnel",
+      public: "公网访问"
+    };
+
+    function checkItem(id, ok, value, detail) {
+      const item=document.createElement("article"); item.className="check";
+      const title=document.createElement("div"); title.className="check-title";
+      const name=document.createElement("span"); name.textContent=labels[id];
+      const state=document.createElement("span"); state.className="state "+(ok?"ok":"error");
+      const dot=document.createElement("i"); dot.className="dot "+(ok?"ok":"error");
+      const stateText=document.createElement("span"); stateText.textContent=ok?"正常":"异常";
+      state.append(dot,stateText); title.append(name,state);
+      const valueEl=document.createElement("div"); valueEl.className="check-value"; valueEl.textContent=value;
+      const detailEl=document.createElement("div"); detailEl.className="check-detail"; detailEl.textContent=detail;
+      item.append(title,valueEl,detailEl); return item;
+    }
+
+    function factRow(name, value) {
+      const row=document.createElement("tr");
+      const heading=document.createElement("th"); heading.textContent=name;
+      const cell=document.createElement("td"); cell.textContent=value;
+      row.append(heading,cell); return row;
+    }
+
+    function duration(seconds) {
+      const hours=Math.floor(seconds/3600); const minutes=Math.floor((seconds%3600)/60);
+      return hours?`${hours} 小时 ${minutes} 分钟`:`${minutes} 分钟`;
+    }
+
+    async function refreshStatus() {
+      const button=$("refreshBtn"); button.disabled=true;
+      try {
+        const response=await fetch("/health/status",{cache:"no-store",headers:{Accept:"application/json"}});
+        if(!response.ok) throw new Error(`状态接口返回 ${response.status}`);
+        const data=await response.json();
+        const checks=$("checks"); checks.replaceChildren(
+          checkItem("local",data.local_api,"API 可响应",`服务版本 ${data.service}`),
+          checkItem("model",data.model_loaded,`IndexTTS ${data.model_version}`,`推理设备 ${data.device}`),
+          checkItem("tunnel",data.tunnel_ready,data.tunnel_ready?"连接已建立":"连接未建立",`cloudflared /ready · ${data.connector.latency_ms} ms`),
+          checkItem("public",data.public_reachable,data.public_reachable?"公网可访问":`公网不可访问${data.public.status_code?` · ${data.public.status_code}`:""}`,`${data.public_url || "未配置公网地址"} · ${data.public.latency_ms} ms`)
+        );
+
+        const facts=$("facts"); facts.replaceChildren(
+          factRow("模型版本",data.model_version),
+          factRow("推理设备",data.device),
+          factRow("GPU 排队数量",String(data.queue_depth)),
+          factRow("任务统计",Object.entries(data.task_counts).map(([key,value])=>`${key}: ${value}`).join("，") || "暂无任务"),
+          factRow("服务运行时间",duration(data.uptime_seconds)),
+          factRow("公网地址",data.public_url || "未配置"),
+          factRow("最近检测",new Date(data.checked_at).toLocaleString("zh-CN",{hour12:false}))
+        );
+
+        const errorBox=$("errorBox"); errorBox.replaceChildren();
+        errorBox.style.background=""; errorBox.style.borderColor=""; errorBox.style.color="";
+        if(data.reasons.length) {
+          const intro=document.createElement("strong"); intro.textContent="检测到以下问题：";
+          const list=document.createElement("ul"); data.reasons.forEach(reason=>{const item=document.createElement("li"); item.textContent=reason; list.append(item);});
+          errorBox.append(intro,list); errorBox.classList.add("visible");
+        } else {
+          errorBox.textContent="未检测到异常，本机与远程链路均可用。"; errorBox.classList.add("visible");
+          errorBox.style.background="var(--ok-bg)"; errorBox.style.borderColor="#9ed4b5"; errorBox.style.color="#145c39";
+        }
+
+        $("overallDot").className="dot "+(data.status==="ok"?"ok":"error");
+        $("overallText").textContent=data.status==="ok"?"全部正常":"检测到异常";
+        $("checkedAt").textContent=`检测时间：${new Date(data.checked_at).toLocaleTimeString("zh-CN",{hour12:false})}`;
+      } catch(error) {
+        $("overallDot").className="dot error"; $("overallText").textContent="状态页连接失败";
+        $("checks").replaceChildren(checkItem("local",false,"无法读取状态",error.message));
+        $("checkedAt").textContent=error.message;
+      } finally { button.disabled=false; }
+    }
+
+    if (["127.0.0.1","localhost","::1"].includes(window.location.hostname)) $("controllerLink").hidden=false;
+    $("refreshBtn").onclick=refreshStatus;
+    refreshStatus();
+    setInterval(refreshStatus,10000);
+  </script>
+</body>
+</html>

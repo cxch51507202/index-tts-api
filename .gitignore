@@ -1,0 +1,36 @@
+venv/
+__pycache__
+*.egg-info
+*.DS_Store
+.idea/
+.vscode/
+checkpoints/*.pth
+checkpoints/*.vocab
+checkpoints/*.model
+checkpoints/.cache
+outputs/
+api_data/
+logs/
+build/
+*.py[cod]
+*.egg-info/
+.venv
+
+# Local API state and credentials
+api_config.json
+voices.json
+api_data/
+outputs/
+logs/
+
+# Private reference recordings and generated audio
+prompts/*.wav
+*.wav
+
+# Machine-specific launchers, tunnel files, and editor backups
+*.cmd
+*.vbs
+*.ps1
+*.original
+*.bak_*
+cloudflared-*.log

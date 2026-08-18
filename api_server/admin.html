@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IndexTTS 音色管理</title>
+  <style>
+    :root { color-scheme: light; --ink:#17212b; --muted:#65727d; --line:#d9e1e7; --paper:#f6f8fa; --panel:#fff; --accent:#0b7285; --accent-dark:#075b6a; --danger:#b42318; --ok:#19764a; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--paper); color:var(--ink); font:14px/1.5 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+    header { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:24px max(20px,calc((100vw - 1120px)/2)); background:#102a43; color:#fff; }
+    h1,h2,p { margin:0; }
+    h1 { font-size:22px; letter-spacing:0; }
+    header p { margin-top:5px; color:#c9d7e2; }
+    .status { padding:7px 11px; border:1px solid #6e8796; border-radius:6px; color:#e8f5f8; white-space:nowrap; }
+    .status.ok { border-color:#70c89b; color:#c9f4dc; }
+    .status.error { border-color:#f2a6a0; color:#ffd6d2; }
+    main { width:min(1120px,calc(100% - 32px)); margin:22px auto 42px; display:grid; gap:16px; }
+    .panel { background:var(--panel); border:1px solid var(--line); border-radius:7px; padding:20px; box-shadow:0 1px 2px #102a430d; }
+    .panel-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; }
+    h2 { font-size:17px; }
+    .subtle { color:var(--muted); }
+    .grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
+    .field { display:flex; flex-direction:column; gap:6px; }
+    label { font-weight:600; color:#344454; }
+    input,textarea,select { width:100%; border:1px solid #b9c6d0; border-radius:5px; padding:9px 10px; color:var(--ink); background:#fff; font:inherit; }
+    input:focus,textarea:focus,select:focus { outline:2px solid #8ed1dc; outline-offset:1px; border-color:var(--accent); }
+    textarea { min-height:88px; resize:vertical; }
+    .wide { grid-column:1 / -1; }
+    .actions { display:flex; align-items:center; flex-wrap:wrap; gap:9px; margin-top:15px; }
+    button { border:1px solid var(--accent); border-radius:5px; background:var(--accent); color:#fff; padding:8px 13px; font:600 14px inherit; cursor:pointer; }
+    button:hover { background:var(--accent-dark); border-color:var(--accent-dark); }
+    button.secondary { background:#fff; color:var(--accent-dark); }
+    button.secondary:hover { background:#edf8fa; }
+    button.danger { background:#fff; border-color:#d66a61; color:var(--danger); }
+    button:disabled { opacity:.55; cursor:not-allowed; }
+    .notice { min-height:22px; margin-top:11px; color:var(--muted); }
+    .notice.error { color:var(--danger); }
+    .notice.ok { color:var(--ok); }
+    .voice-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    .voice { border:1px solid var(--line); border-radius:6px; padding:15px; display:flex; flex-direction:column; gap:9px; }
+    .voice-top { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+    .voice-name { font-size:16px; font-weight:700; }
+    .code { display:inline-block; margin-top:3px; padding:2px 6px; border-radius:4px; background:#edf2f5; color:#475867; font:12px ui-monospace,SFMono-Regular,Consolas,monospace; }
+    .badge { padding:3px 7px; border-radius:4px; font-size:12px; background:#e6f5ed; color:var(--ok); white-space:nowrap; }
+    .badge.off { background:#f1f3f5; color:#66717b; }
+    .voice-actions { display:flex; gap:8px; margin-top:auto; }
+    .empty { padding:26px; border:1px dashed #b9c6d0; color:var(--muted); text-align:center; border-radius:6px; }
+    audio { width:100%; margin-top:14px; }
+    @media (max-width:760px) { header,.panel-head { align-items:flex-start; flex-direction:column; } .grid,.voice-grid { grid-template-columns:1fr; } main { width:min(100% - 20px,560px); margin-top:12px; } .panel { padding:15px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div><h1>IndexTTS 音色管理</h1><p>本机音色录入、状态管理和试听</p></div>
+    <div id="connectionStatus" class="status">正在连接</div>
+  </header>
+  <main>
+    <section class="panel">
+      <div class="panel-head"><h2>录入音色</h2><span class="subtle">参考音频至少 3 秒，服务端自动转为 24 kHz 单声道</span></div>
+      <form id="voiceForm">
+        <div class="grid">
+          <div class="field"><label for="voiceName">中文名称</label><input id="voiceName" required maxlength="100" placeholder="历史女声一号"></div>
+          <div class="field"><label for="voiceAudio">参考音频</label><input id="voiceAudio" required type="file" accept="audio/*,.wav,.mp3,.flac,.m4a"></div>
+          <div class="field wide"><label for="voiceDescription">说明</label><textarea id="voiceDescription" maxlength="500" placeholder="沉稳、适合历史讲述"></textarea></div>
+        </div>
+        <div class="actions"><button type="submit">上传音色</button></div>
+      </form>
+      <div id="uploadNotice" class="notice"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><div><h2>已录入音色</h2><span id="voiceCount" class="subtle"></span></div><button id="refreshBtn" class="secondary" type="button">刷新列表</button></div>
+      <div id="voiceNotice" class="notice"></div>
+      <div id="voiceList" class="voice-grid"><div class="empty">正在加载音色列表</div></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>试听</h2><span class="subtle">生成任务会按顺序进入 GPU 队列</span></div>
+      <div class="field"><label for="testVoice">音色</label><select id="testVoice"></select></div>
+      <div class="field" style="margin-top:12px"><label for="testText">文本</label><textarea id="testText" placeholder="输入一段文字进行试听"></textarea></div>
+      <div class="actions"><button id="testBtn" type="button">提交试听任务</button></div>
+      <div id="testNotice" class="notice"></div>
+      <audio id="audioPlayer" controls hidden></audio>
+    </section>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const baseUrl = location.origin;
+    let voices = [];
+
+    function setStatus(text, kind="") { const el=$("connectionStatus"); el.textContent=text; el.className="status "+kind; }
+    function notice(id, text, kind="") { const el=$(id); el.textContent=text; el.className="notice "+kind; }
+    async function apiFetch(path, options={}) {
+      const headers = new Headers(options.headers || {});
+      const response = await fetch(baseUrl + path, {...options, headers});
+      if(!response.ok) { let detail=response.statusText; try { const body=await response.json(); detail=body.detail || detail; } catch (_) {} throw new Error(`${response.status}: ${detail}`); }
+      return response;
+    }
+    function renderVoices() {
+      $("voiceCount").textContent = `${voices.length} 个音色`;
+      const list=$("voiceList"); list.replaceChildren();
+      if(!voices.length) { list.innerHTML='<div class="empty">暂无已启用音色</div>'; }
+      voices.forEach((voice) => {
+        const card=document.createElement("article"); card.className="voice";
+        const top=document.createElement("div"); top.className="voice-top";
+        const title=document.createElement("div");
+        const name=document.createElement("div"); name.className="voice-name"; name.textContent=voice.name;
+        const codeRow=document.createElement("div"); codeRow.style.cssText="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:3px";
+        const code=document.createElement("span"); code.className="code"; code.textContent=voice.code;
+        const copy=document.createElement("button"); copy.type="button"; copy.className="secondary"; copy.style.cssText="padding:3px 7px;font-size:12px"; copy.textContent="复制代号";
+        copy.onclick=async()=>{ try { await navigator.clipboard.writeText(voice.code); copy.textContent="已复制"; setTimeout(()=>copy.textContent="复制代号",1200); } catch(_) { notice("voiceNotice",`代号：${voice.code}`,"ok"); } };
+        codeRow.append(code,copy); title.append(name,codeRow);
+        const badge=document.createElement("span"); badge.className="badge"+(voice.enabled?"":" off"); badge.textContent=voice.enabled?"已启用":"已停用";
+        top.append(title,badge); card.append(top);
+        const desc=document.createElement("div"); desc.className="subtle"; desc.textContent=voice.description || "暂无说明"; card.append(desc);
+        const actions=document.createElement("div"); actions.className="voice-actions";
+        const toggle=document.createElement("button"); toggle.className=voice.enabled?"danger":"secondary"; toggle.textContent=voice.enabled?"停用":"启用"; toggle.onclick=()=>toggleVoice(voice); actions.append(toggle); card.append(actions);
+        list.append(card);
+      });
+      const select=$("testVoice"); select.replaceChildren(); voices.filter(v=>v.enabled).forEach(v=>{const option=document.createElement("option"); option.value=v.code; option.textContent=`${v.name} (${v.code})`; select.append(option);});
+    }
+    async function loadVoices() { const response=await apiFetch("/api/v1/voices?include_disabled=true"); voices=await response.json(); renderVoices(); setStatus("服务正常","ok"); notice("voiceNotice",`已加载 ${voices.length} 个音色`,"ok"); }
+    async function toggleVoice(voice) { try { await apiFetch(`/api/v1/voices/${encodeURIComponent(voice.code)}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({enabled:!voice.enabled})}); await loadVoices(); } catch(error) { notice("voiceNotice",error.message,"error"); } }
+    $("refreshBtn").onclick=async()=>{ try { await loadVoices(); } catch(error) { setStatus("连接失败","error"); notice("voiceNotice",error.message,"error"); } };
+    $("voiceForm").onsubmit=async(event)=>{ event.preventDefault(); try { const audio=$("voiceAudio").files[0]; if(!audio) throw new Error("请选择参考音频"); const form=new FormData(); form.append("name",$("voiceName").value.trim()); form.append("description",$("voiceDescription").value.trim()); form.append("audio",audio); const response=await apiFetch("/api/v1/voices",{method:"POST",body:form}); const voice=await response.json(); notice("uploadNotice",`已录入：${voice.name}，系统代号：${voice.code}`,"ok"); event.target.reset(); await loadVoices(); } catch(error) { notice("uploadNotice",error.message,"error"); } };
+    $("testBtn").onclick=async()=>{ const player=$("audioPlayer"); player.hidden=true; try { const text=$("testText").value.trim(); const voice=$("testVoice").value; if(!text) throw new Error("请输入试听文本"); if(!voice) throw new Error("暂无可用音色"); const response=await apiFetch("/api/v1/tts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({voice,text})}); let task=await response.json(); notice("testNotice",`任务 #${task.sequence} 已提交，排队位置：${task.queue_position ?? "处理中"}`); for(let i=0;i<360;i++){ await new Promise(resolve=>setTimeout(resolve,800)); task=await (await apiFetch(`/api/v1/tasks/${task.id}`)).json(); notice("testNotice",`任务 #${task.sequence}：${task.status}${task.queue_position ? `，排队位置 ${task.queue_position}` : ""}`); if(task.status==="succeeded"){ const audio=await (await apiFetch(`/api/v1/tasks/${task.id}/audio`)).blob(); player.src=URL.createObjectURL(audio); player.hidden=false; notice("testNotice",`任务 #${task.sequence} 已完成`,"ok"); break; } if(task.status==="failed") throw new Error(task.error || "生成失败"); } } catch(error) { notice("testNotice",error.message,"error"); } };
+    loadVoices().catch((error)=>{ setStatus("连接失败","error"); notice("voiceNotice",error.message,"error"); });
+  </script>
+</body>
+</html>
