@@ -3,8 +3,11 @@
 <div align="center">
   <img src="assets/index_icon.png" width="180" alt="IndexTTS" />
   <h2>Remote text-to-speech API with voice management and queued generation</h2>
-  <p>工业级可控、高效的零样本文本转语音系统</p>
 </div>
+
+<p align="center">
+  <a href="README.md">English</a> | <a href="README.zh-CN.md">简体中文</a>
+</p>
 
 <p align="center">
   <a href="https://arxiv.org/abs/2502.05512"><img src="https://img.shields.io/badge/arXiv-2502.05512-b31b1b" alt="Paper" /></a>
@@ -12,11 +15,9 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/code-Apache--2.0-green" alt="Apache 2.0" /></a>
 </p>
 
-> **Notice / 说明**
+> **Notice**
 >
 > This repository is a community-maintained fork/workspace based on the upstream [IndexTTS](https://github.com/index-tts/index-tts) project. It contains source-code and integration changes; it does not redistribute model weights.
->
-> 本仓库是基于上游 [IndexTTS](https://github.com/index-tts/index-tts) 的社区维护版本，包含源码和集成改动，不重新分发模型权重。
 
 ## API Service Overview
 
